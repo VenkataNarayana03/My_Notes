@@ -48,6 +48,30 @@ const getTransporter = () => {
   });
 };
 
+export const verifyEmailConnection = async () => {
+  const transporter = getTransporter();
+
+  if (!transporter) {
+    return {
+      ok: false,
+      error: 'Email environment variables are missing or placeholder values.'
+    };
+  }
+
+  try {
+    await transporter.verify();
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      code: error.code,
+      command: error.command,
+      responseCode: error.responseCode,
+      error: error.message
+    };
+  }
+};
+
 const formatDateTime = (date) => {
   if (!date) {
     return 'No deadline set';

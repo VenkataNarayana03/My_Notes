@@ -5,6 +5,7 @@ import connectDB from './config/db.js';
 import adminRoutes from './routes/adminRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import { startReminderService } from './services/reminderService.js';
+import { verifyEmailConnection } from './services/emailService.js';
 import taskRoutes from './routes/taskRoutes.js';
 
 dotenv.config();
@@ -34,6 +35,11 @@ app.get('/api/health', (req, res) => {
     ),
     clientUrl: process.env.CLIENT_URL || 'http://localhost:5173'
   });
+});
+
+app.get('/api/health/email', async (req, res) => {
+  const emailStatus = await verifyEmailConnection();
+  res.status(emailStatus.ok ? 200 : 503).json(emailStatus);
 });
 
 app.use('/api/admin', adminRoutes);
