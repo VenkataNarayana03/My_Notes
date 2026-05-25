@@ -96,3 +96,27 @@ export const sendTaskReminderEmail = async ({ user, task }) => {
 
   return true;
 };
+
+export const sendLoginOtpEmail = async ({ user, otp }) => {
+  const transporter = getTransporter();
+
+  if (!transporter) {
+    return false;
+  }
+
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM,
+    to: user.email,
+    subject: 'Your Task Notes login code',
+    text: [
+      `Hi ${user.name},`,
+      '',
+      `Your one-time login code is: ${otp}`,
+      '',
+      'This code expires in 10 minutes.',
+      'If you did not request this code, you can ignore this email.'
+    ].join('\n')
+  });
+
+  return true;
+};
