@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 
 const requiredEmailConfig = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'];
+const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS || 10000);
 
 const isPlaceholderValue = (value) => {
   return !value || value.startsWith('your_') || value.includes('your_email');
@@ -13,19 +14,37 @@ const isEmailConfigured = () => {
     !isPlaceholderValue(process.env.MAIL_FROM);
 };
 
+const getSmtpPassword = () => {
+  if (process.env.SMTP_HOST?.includes('gmail.com')) {
+    return process.env.SMTP_PASS.replace(/\s/g, '');
+  }
+
+  return process.env.SMTP_PASS;
+};
+
 const getTransporter = () => {
   if (!isEmailConfigured()) {
+    const missingKeys = requiredEmailConfig.filter((key) => !process.env[key]);
+    if (missingKeys.length) {
+      console.log(`Email not configured. Missing: ${missingKeys.join(', ')}`);
+    }
+
     return null;
   }
 
+  const port = Number(process.env.SMTP_PORT);
+
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT),
-    secure: process.env.SMTP_SECURE === 'true',
+    port,
+    secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465,
     auth: {
       user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
+      pass: getSmtpPassword()
+    },
+    connectionTimeout: EMAIL_TIMEOUT_MS,
+    greetingTimeout: EMAIL_TIMEOUT_MS,
+    socketTimeout: EMAIL_TIMEOUT_MS
   });
 };
 

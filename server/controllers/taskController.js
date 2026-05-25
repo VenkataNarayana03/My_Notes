@@ -26,6 +26,18 @@ export const getTasks = async (req, res, next) => {
   }
 };
 
+const sendTaskCreatedEmailInBackground = async ({ user, task }) => {
+  try {
+    const sent = await sendTaskCreatedEmail({ user, task });
+
+    if (sent) {
+      await Task.updateOne({ _id: task._id }, { taskEmailSent: true });
+    }
+  } catch (error) {
+    console.error(`Task-created email failed for task ${task._id}: ${error.message}`);
+  }
+};
+
 export const createTask = async (req, res, next) => {
   try {
     const { title, description, dueDate } = req.body;
@@ -44,18 +56,8 @@ export const createTask = async (req, res, next) => {
       dueDate: parsedDueDate
     });
 
-    try {
-      const sent = await sendTaskCreatedEmail({ user: req.user, task });
-
-      if (sent) {
-        task.taskEmailSent = true;
-        await task.save();
-      }
-    } catch (error) {
-      console.error(`Task-created email failed for task ${task._id}: ${error.message}`);
-    }
-
     res.status(201).json(task);
+    sendTaskCreatedEmailInBackground({ user: req.user, task });
   } catch (error) {
     next(error);
   }
