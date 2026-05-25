@@ -21,6 +21,21 @@ app.get('/', (req, res) => {
   res.json({ message: 'Task Notes API is running' });
 });
 
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    version: 'task-email-background-v1',
+    emailConfigured: Boolean(
+      process.env.SMTP_HOST &&
+      process.env.SMTP_PORT &&
+      process.env.SMTP_USER &&
+      process.env.SMTP_PASS &&
+      process.env.MAIL_FROM
+    ),
+    clientUrl: process.env.CLIENT_URL || 'http://localhost:5173'
+  });
+});
+
 app.use('/api/admin', adminRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/tasks', taskRoutes);
