@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 
 const requiredEmailConfig = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'];
 const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS || 10000);
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 const isPlaceholderValue = (value) => {
   return !value || value.startsWith('your_') || value.includes('your_email');
@@ -21,6 +22,25 @@ const getSmtpPassword = () => {
 
   return process.env.SMTP_PASS;
 };
+
+const parseMailFrom = () => {
+  const mailFrom = process.env.MAIL_FROM || '';
+  const match = mailFrom.match(/^(.*)<(.+)>$/);
+
+  if (!match) {
+    return {
+      name: process.env.MAIL_FROM_NAME || 'Task Notes',
+      email: mailFrom.replace(/"/g, '').trim()
+    };
+  }
+
+  return {
+    name: match[1].replace(/"/g, '').trim() || 'Task Notes',
+    email: match[2].trim()
+  };
+};
+
+const isBrevoConfigured = () => Boolean(process.env.BREVO_API_KEY && process.env.MAIL_FROM);
 
 const getTransporter = () => {
   if (!isEmailConfigured()) {
@@ -49,6 +69,10 @@ const getTransporter = () => {
 };
 
 export const verifyEmailConnection = async () => {
+  if (isBrevoConfigured()) {
+    return { ok: true, provider: 'brevo' };
+  }
+
   const transporter = getTransporter();
 
   if (!transporter) {
@@ -60,7 +84,7 @@ export const verifyEmailConnection = async () => {
 
   try {
     await transporter.verify();
-    return { ok: true };
+    return { ok: true, provider: 'smtp' };
   } catch (error) {
     return {
       ok: false,
@@ -84,16 +108,50 @@ const formatDateTime = (date) => {
   }).format(new Date(date));
 };
 
-export const sendTaskCreatedEmail = async ({ user, task }) => {
+const sendEmail = async ({ to, subject, text }) => {
+  if (isBrevoConfigured()) {
+    const sender = parseMailFrom();
+    const response = await fetch(BREVO_API_URL, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'api-key': process.env.BREVO_API_KEY,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender,
+        to: [{ email: to }],
+        subject,
+        textContent: text
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Brevo email failed: ${response.status} ${errorText}`);
+    }
+
+    return true;
+  }
+
   const transporter = getTransporter();
 
   if (!transporter) {
-    console.log('Email not configured. Skipping task-created email.');
     return false;
   }
 
   await transporter.sendMail({
     from: process.env.MAIL_FROM,
+    to,
+    subject,
+    text
+  });
+
+  return true;
+};
+
+export const sendTaskCreatedEmail = async ({ user, task }) => {
+  const sent = await sendEmail({
     to: user.email,
     subject: `Task created: ${task.title}`,
     text: [
@@ -109,19 +167,16 @@ export const sendTaskCreatedEmail = async ({ user, task }) => {
     ].filter(Boolean).join('\n')
   });
 
+  if (!sent) {
+    console.log('Email not configured. Skipping task-created email.');
+    return false;
+  }
+
   return true;
 };
 
 export const sendTaskReminderEmail = async ({ user, task }) => {
-  const transporter = getTransporter();
-
-  if (!transporter) {
-    console.log('Email not configured. Skipping reminder email.');
-    return false;
-  }
-
-  await transporter.sendMail({
-    from: process.env.MAIL_FROM,
+  const sent = await sendEmail({
     to: user.email,
     subject: `Reminder: ${task.title} is due soon`,
     text: [
@@ -136,6 +191,11 @@ export const sendTaskReminderEmail = async ({ user, task }) => {
       'Please complete it before the deadline.'
     ].filter(Boolean).join('\n')
   });
+
+  if (!sent) {
+    console.log('Email not configured. Skipping reminder email.');
+    return false;
+  }
 
   return true;
 };

@@ -27,11 +27,16 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     version: 'task-email-background-v1',
     emailConfigured: Boolean(
-      process.env.SMTP_HOST &&
-      process.env.SMTP_PORT &&
-      process.env.SMTP_USER &&
-      process.env.SMTP_PASS &&
-      process.env.MAIL_FROM
+      process.env.MAIL_FROM &&
+      (
+        process.env.BREVO_API_KEY ||
+        (
+          process.env.SMTP_HOST &&
+          process.env.SMTP_PORT &&
+          process.env.SMTP_USER &&
+          process.env.SMTP_PASS
+        )
+      )
     ),
     clientUrl: process.env.CLIENT_URL || 'http://localhost:5173'
   });
